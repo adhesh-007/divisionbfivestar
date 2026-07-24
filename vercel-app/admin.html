@@ -49,6 +49,7 @@
       <button data-view="meetings"><span class="dot"></span>5-Star Meetings</button>
       <button data-view="pathways"><span class="dot"></span>Pathways Adoption</button>
       <button data-view="mentors"><span class="dot"></span>Mentor Assignment</button>
+      <button data-view="strength"><span class="dot"></span>Attendance &amp; Strength</button>
       <button data-view="clubs"><span class="dot"></span>Manage Clubs &amp; Areas</button>
     </nav>
     <button id="exportExcelBtn" style="all:unset;cursor:pointer;background:var(--gold);color:var(--ink);font-weight:700;font-size:13px;padding:10px 12px;border-radius:8px;text-align:center;">⬇ Export to Excel</button>
@@ -104,6 +105,7 @@
           <div class="field"><label>Started &amp; ended on time?</label>
             <select name="onTime"><option value="1">Yes</option><option value="0">No</option></select></div>
           <div class="field"><label># Pathways speeches</label><input type="number" name="speeches" min="0" value="0" required></div>
+          <div class="field"><label># Members present</label><input type="number" name="membersPresent" min="0" value="0" required></div>
           <div class="field"><label># Guests</label><input type="number" name="guests" min="0" value="0" required></div>
           <div class="field"><label>Agenda 3+ days early?</label>
             <select name="agenda"><option value="1">Yes</option><option value="0">No</option></select></div>
@@ -152,6 +154,31 @@
         </form>
       </div>
       <div class="panel"><h3>Mentor log</h3><div id="mentorsTableWrap"></div></div>
+    </section>
+
+    <!-- CLUB STRENGTH -->
+    <section class="view" id="view-strength">
+      <h2 class="page-title">Attendance &amp; Strength</h2>
+      <p class="page-sub">Member + guest attendance per meeting, and total club membership (strength), tracked monthly so growth or loss is visible at a glance.</p>
+      <div class="admin-banner">🔒 You're viewing in read-only mode. Log in as admin (sidebar) to add or remove records.</div>
+      <div class="panel admin-only">
+        <h3>Log club strength</h3>
+        <form class="entry-form" id="form-strength">
+          <div class="field"><label>Club</label><select name="club" required></select></div>
+          <div class="field"><label>Month</label><input type="month" name="month" required></div>
+          <div class="field"><label>Total members (strength)</label><input type="number" name="strength" min="0" required></div>
+          <button class="primary" type="submit">Add record</button>
+        </form>
+      </div>
+      <div class="panel">
+        <h3>Strength log</h3>
+        <p class="page-sub" style="margin-bottom:10px;">Net growth compares each entry to that club's previous month on record.</p>
+        <div id="strengthTableWrap"></div>
+      </div>
+      <div class="panel">
+        <h3>Meeting attendance (members + guests)</h3>
+        <div id="attendanceTableWrap"></div>
+      </div>
     </section>
 
     <!-- CLUBS & AREAS -->

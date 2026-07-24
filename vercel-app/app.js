@@ -1,7 +1,7 @@
 // ============================================================
 // STATE + API
 // ============================================================
-let state = { clubs: [], meetings: [], pathways: [], mentors: [], directors: {} };
+let state = { clubs: [], meetings: [], pathways: [], mentors: [], directors: {}, strength: [] };
 let isAdmin = false; // only ever true on the admin page, after a verified server session
 
 const DEFAULT_DIRECTORS = { B1: "TM Karthick Rajendran", B2: "Atchayashiri", B3: "Jonathan", B4: "Sunita Rajaseelan" };
@@ -357,6 +357,7 @@ function renderClubDashboard(){
   const pwPct = clubPathwaysPct(club);
   const mtPct = clubMentorPct(club);
   const status = computeClubStatus(club);
+  const growth = clubGrowth(club);
 
   // Score distribution donut
   const scoreCounts = {};
@@ -375,18 +376,33 @@ function renderClubDashboard(){
   meetings.forEach(m=>{ const lbl = monthLabel(m.date); byMonth[lbl] = (byMonth[lbl]||0)+1; });
   const monthBars = Object.keys(byMonth).sort((a,b)=> new Date('1 '+a) - new Date('1 '+b)).map(lbl=>({label:lbl, value:byMonth[lbl]}));
 
-  // Matrix: month x metrics
+  // Attendance per meeting (members vs guests) — stacked as two bar charts side by side for readability
+  const attendanceMeetings = [...meetings].sort((a,b)=> a.date<b.date?-1:1).slice(-8);
+  const attendanceBars = attendanceMeetings.map(m=>({ label: m.date.slice(5), value: (m.membersPresent||0)+(m.guests||0) }));
+  const totalMembersPresent = meetings.reduce((s,m)=> s+(m.membersPresent||0), 0);
+  const totalGuests = meetings.reduce((s,m)=> s+(m.guests||0), 0);
+  const avgAttendance = meetings.length ? Math.round((totalMembersPresent+totalGuests)/meetings.length) : null;
+
+  // Strength trend
+  const strengthHist = strengthHistory(club);
+  const strengthBars = strengthHist.map(r=>({ label: r.month.slice(2), value: r.strength }));
+
+  // Matrix: month x metrics (now includes strength where logged)
   const months = [...new Set([
     ...meetings.map(m=>m.date.slice(0,7)),
     ...state.pathways.filter(r=>r.club===club).map(r=>r.month),
-    ...state.mentors.filter(r=>r.club===club).map(r=>r.month)
+    ...state.mentors.filter(r=>r.club===club).map(r=>r.month),
+    ...strengthHist.map(r=>r.month)
   ])].sort();
   const matrixRows = months.map(mo=>{
     const mMeetings = meetings.filter(m=>m.date.slice(0,7)===mo);
     const mFive = mMeetings.filter(m=>meetingScore(m)===5).length;
+    const mMembers = mMeetings.reduce((s,m)=> s+(m.membersPresent||0), 0);
+    const mGuests = mMeetings.reduce((s,m)=> s+(m.guests||0), 0);
     const pw = state.pathways.find(r=>r.club===club && r.month===mo);
     const mt = state.mentors.find(r=>r.club===club && r.month===mo);
-    return { mo, held: mMeetings.length, five: mFive, pw: pw?pct(pw.active,pw.total):null, mt: mt?pct(mt.assigned,mt.total):null };
+    const st = strengthHist.find(r=>r.month===mo);
+    return { mo, held: mMeetings.length, five: mFive, members: mMembers, guests: mGuests, pw: pw?pct(pw.active,pw.total):null, mt: mt?pct(mt.assigned,mt.total):null, strength: st ? st.strength : null };
   });
 
   body.innerHTML = `
@@ -405,24 +421,31 @@ function renderClubDashboard(){
       <div class="stat-card"><div class="label">5-Star Rate</div><div class="value">${fsRate===null?'—':fsRate+'%'}</div></div>
       <div class="stat-card"><div class="label">Pathways Adoption</div><div class="value">${pwPct===null?'—':pwPct+'%'}</div></div>
       <div class="stat-card"><div class="label">Mentor Coverage</div><div class="value">${mtPct===null?'—':mtPct+'%'}</div></div>
+      <div class="stat-card"><div class="label">Club Strength</div><div class="value">${growth.latest ? growth.latest.strength : '—'}</div><div class="sub">${growth.latest ? 'as of '+growth.latest.month : 'not logged yet'}</div></div>
+      <div class="stat-card"><div class="label">Net Growth</div><div class="value" style="color:${growth.delta>0?'var(--sage)':growth.delta<0?'var(--clay)':'inherit'};">${growth.delta===null?'—':(growth.delta>0?'▲ +':growth.delta<0?'▼ ':'– ')+growth.delta}</div><div class="sub">${growth.previous ? 'vs '+growth.previous.month : 'need 2+ months logged'}</div></div>
+      <div class="stat-card"><div class="label">Avg Attendance / Meeting</div><div class="value">${avgAttendance===null?'—':avgAttendance}</div><div class="sub">${totalMembersPresent} members + ${totalGuests} guests total</div></div>
     </div>
     <div class="viz-row">
       <div class="viz-card"><h4>Meeting Score Distribution</h4>${buildDonut(scoreSegments)}</div>
       <div class="viz-card"><h4>5-Star vs Not</h4>${buildDonut(yn)}</div>
       <div class="viz-card"><h4>Meetings per Month</h4>${monthBars.length ? buildBarChart(monthBars) : '<div class="empty" style="padding:30px 0;">No meetings logged</div>'}</div>
     </div>
+    <div class="viz-row">
+      <div class="viz-card" style="flex:1.4;"><h4>Attendance, Last 8 Meetings (members + guests)</h4>${attendanceBars.length ? buildBarChart(attendanceBars) : '<div class="empty" style="padding:30px 0;">No meetings logged</div>'}</div>
+      <div class="viz-card"><h4>Club Strength Trend</h4>${strengthBars.length ? buildBarChart(strengthBars) : '<div class="empty" style="padding:30px 0;">No strength records logged — add one in Attendance &amp; Strength</div>'}</div>
+    </div>
     <div class="panel">
       <h3>Monthly Matrix</h3>
-      ${matrixRows.length ? `<table><thead><tr><th>Month</th><th>Meetings</th><th>5-Star</th><th>Pathways</th><th>Mentor</th></tr></thead><tbody>
+      ${matrixRows.length ? `<table><thead><tr><th>Month</th><th>Meetings</th><th>5-Star</th><th>Members</th><th>Guests</th><th>Pathways</th><th>Mentor</th><th>Strength</th></tr></thead><tbody>
         ${matrixRows.map(r=>`<tr>
-          <td>${r.mo}</td><td>${r.held}</td><td>${r.five}</td>
-          <td>${r.pw===null?'—':r.pw+'%'}</td><td>${r.mt===null?'—':r.mt+'%'}</td>
+          <td>${r.mo}</td><td>${r.held}</td><td>${r.five}</td><td>${r.members}</td><td>${r.guests}</td>
+          <td>${r.pw===null?'—':r.pw+'%'}</td><td>${r.mt===null?'—':r.mt+'%'}</td><td>${r.strength===null?'—':r.strength}</td>
         </tr>`).join('')}
       </tbody></table>` : `<div class="empty">No data logged for this club yet.</div>`}
     </div>
   `;
   const exportBtn = document.getElementById('exportClubBtn');
-  if(exportBtn) exportBtn.addEventListener('click', ()=> exportClubToExcel(clubObj, { meetings, fsRate, pwPct, mtPct, status, matrixRows }));
+  if(exportBtn) exportBtn.addEventListener('click', ()=> exportClubToExcel(clubObj, { meetings, fsRate, pwPct, mtPct, status, matrixRows, growth }));
 }
 
 // ============================================================
@@ -621,13 +644,13 @@ function renderMeetings(){
   if(state.meetings.length===0){ wrap.innerHTML = `<div class="empty">No meetings logged yet.</div>`; return; }
   const rows = [...state.meetings].sort((a,b)=> a.date<b.date?1:-1);
   wrap.innerHTML = `<table><thead><tr>
-    <th>Club</th><th>Date</th><th>On time</th><th>Speeches</th><th>Guests</th><th>Agenda</th><th>Flyer</th><th>Score</th><th></th>
+    <th>Club</th><th>Date</th><th>On time</th><th>Speeches</th><th>Members</th><th>Guests</th><th>Agenda</th><th>Flyer</th><th>Score</th><th></th>
   </tr></thead><tbody>
   ${rows.map(m=>{
     const score = meetingScore(m);
     return `<tr>
       <td>${escapeHtml(m.club)}</td><td>${m.date}</td><td>${m.onTime?'Yes':'No'}</td>
-      <td>${m.speeches}</td><td>${m.guests}</td><td>${m.agenda?'Yes':'No'}</td><td>${m.flyer?'Yes':'No'}</td>
+      <td>${m.speeches}</td><td>${m.membersPresent ?? '—'}</td><td>${m.guests}</td><td>${m.agenda?'Yes':'No'}</td><td>${m.flyer?'Yes':'No'}</td>
       <td><span class="pill ${score===5?'sage':score>=3?'amber':'clay'}">${score}/5${score===5?' ★':''}</span></td>
       <td><button class="ghost admin-only" data-del-meeting="${m.id}">Remove</button></td>
     </tr>`;
@@ -655,6 +678,59 @@ function renderMentors(){
     {label:'Assigned', render:r=>r.assigned}, {label:'Total members', render:r=>r.total},
     {label:'Coverage', render:r=>{ const p=pct(r.assigned,r.total); return `<span class="pill ${pillClass(p,90,60)}">${p}%</span>`; }},
   ], 'del-mentors');
+}
+
+// ---------- Club Strength (membership) helpers ----------
+function strengthHistory(club){
+  return state.strength.filter(r=>r.club===club).sort((a,b)=> a.month<b.month?-1:1);
+}
+function clubGrowth(club){
+  const hist = strengthHistory(club);
+  if(hist.length===0) return { latest:null, previous:null, delta:null, deltaPct:null };
+  const latest = hist[hist.length-1];
+  const previous = hist.length>1 ? hist[hist.length-2] : null;
+  const delta = previous ? latest.strength - previous.strength : null;
+  const deltaPct = previous && previous.strength>0 ? Math.round((delta/previous.strength)*1000)/10 : null;
+  return { latest, previous, delta, deltaPct };
+}
+function renderStrength(){
+  const wrap = document.getElementById('strengthTableWrap');
+  if(state.strength.length===0){ wrap.innerHTML = `<div class="empty">No strength records logged yet.</div>`; return; }
+  const rows = [...state.strength].sort((a,b)=> a.month<b.month?1:-1);
+  wrap.innerHTML = `<table><thead><tr>
+    <th>Club</th><th>Month</th><th>Strength</th><th>Net Growth vs Prior Month</th><th></th>
+  </tr></thead><tbody>
+  ${rows.map(r=>{
+    const hist = strengthHistory(r.club);
+    const idx = hist.findIndex(h=>h.id===r.id);
+    const prior = idx>0 ? hist[idx-1] : null;
+    const delta = prior ? r.strength - prior.strength : null;
+    const deltaTxt = delta===null ? '—' : (delta>0 ? `▲ +${delta}` : delta<0 ? `▼ ${delta}` : '– 0');
+    const deltaClass = delta===null ? 'flat' : delta>0 ? 'sage' : delta<0 ? 'clay' : 'flat';
+    return `<tr>
+      <td>${escapeHtml(r.club)}</td><td>${r.month}</td><td>${r.strength}</td>
+      <td><span class="pill ${deltaClass}">${deltaTxt}</span></td>
+      <td><button class="ghost admin-only" data-del-strength="${r.id}">Remove</button></td>
+    </tr>`;
+  }).join('')}
+  </tbody></table>`;
+}
+function renderAttendance(){
+  const wrap = document.getElementById('attendanceTableWrap');
+  if(state.meetings.length===0){ wrap.innerHTML = `<div class="empty">No meetings logged yet — attendance shows here once meetings are added.</div>`; return; }
+  const rows = [...state.meetings].sort((a,b)=> a.date<b.date?1:-1);
+  wrap.innerHTML = `<table><thead><tr>
+    <th>Club</th><th>Date</th><th>Members Present</th><th>Guests</th><th>Total Attendance</th><th>Guests as % of Attendance</th>
+  </tr></thead><tbody>
+  ${rows.map(m=>{
+    const members = m.membersPresent||0, guests = m.guests||0, total = members+guests;
+    const guestShare = total>0 ? Math.round((guests/total)*100) : null;
+    return `<tr>
+      <td>${escapeHtml(m.club)}</td><td>${m.date}</td><td>${members}</td><td>${guests}</td>
+      <td><strong>${total}</strong></td><td>${guestShare===null?'—':guestShare+'%'}</td>
+    </tr>`;
+  }).join('')}
+  </tbody></table>`;
 }
 
 // ============================================================
@@ -711,6 +787,8 @@ function renderAll(){
   renderMeetings();
   renderPathways();
   renderMentors();
+  renderStrength();
+  renderAttendance();
   renderClubRoster();
   renderDirectors();
 }
@@ -725,6 +803,7 @@ document.getElementById('form-meeting').addEventListener('submit', async (e)=>{
     await apiSend('/api/meetings', 'POST', {
       club: f.get('club'), date: f.get('date'),
       onTime: f.get('onTime')==='1', speeches: Number(f.get('speeches')), guests: Number(f.get('guests')),
+      membersPresent: Number(f.get('membersPresent')),
       agenda: f.get('agenda')==='1', flyer: f.get('flyer')==='1'
     });
     await refreshState();
@@ -749,6 +828,17 @@ document.getElementById('form-mentors').addEventListener('submit', async (e)=>{
   if(!f.get('club')) return;
   try{
     await apiSend('/api/mentors', 'POST', { club: f.get('club'), month: f.get('month'), assigned: Number(f.get('assigned')), total: Number(f.get('total')) });
+    await refreshState();
+    e.target.reset(); renderAll();
+  }catch(err){}
+});
+document.getElementById('form-strength').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  if(!requireAdmin()) return;
+  const f = new FormData(e.target);
+  if(!f.get('club')) return;
+  try{
+    await apiSend('/api/strength', 'POST', { club: f.get('club'), month: f.get('month'), strength: Number(f.get('strength')) });
     await refreshState();
     e.target.reset(); renderAll();
   }catch(err){}
@@ -794,6 +884,8 @@ document.addEventListener('click', async (e)=>{
   if(dp){ if(!requireAdmin()) return; try{ await apiSend('/api/pathways?id='+encodeURIComponent(dp.dataset.delPathways), 'DELETE'); await refreshState(); renderAll(); }catch(err){} return; }
   const dme = e.target.closest('[data-del-mentors]');
   if(dme){ if(!requireAdmin()) return; try{ await apiSend('/api/mentors?id='+encodeURIComponent(dme.dataset.delMentors), 'DELETE'); await refreshState(); renderAll(); }catch(err){} return; }
+  const ds = e.target.closest('[data-del-strength]');
+  if(ds){ if(!requireAdmin()) return; try{ await apiSend('/api/strength?id='+encodeURIComponent(ds.dataset.delStrength), 'DELETE'); await refreshState(); renderAll(); }catch(err){} return; }
   const dc = e.target.closest('[data-del-club]');
   if(dc){ if(!requireAdmin()) return; try{ await apiSend('/api/clubs?name='+encodeURIComponent(dc.dataset.delClub), 'DELETE'); await refreshState(); renderAll(); }catch(err){} return; }
 });
@@ -807,10 +899,11 @@ function exportClubToExcel(clubObj, computed){
     return;
   }
   const club = clubObj.name;
-  const { meetings, fsRate, pwPct, mtPct, status, matrixRows } = computed;
+  const { meetings, fsRate, pwPct, mtPct, status, matrixRows, growth } = computed;
   const today = new Date().toISOString().slice(0,10);
   const wb = XLSX.utils.book_new();
   const risk = computeClubRisk(clubObj);
+  const g = growth || clubGrowth(club);
 
   // --- Sheet 1: Summary ---
   const summaryRows = [
@@ -825,6 +918,8 @@ function exportClubToExcel(clubObj, computed){
     ['5-Star Meeting Rate', fsRate===null?'—':fsRate+'%'],
     ['Pathways Adoption (latest month)', pwPct===null?'—':pwPct+'%'],
     ['Mentor Coverage (latest month)', mtPct===null?'—':mtPct+'%'],
+    ['Club Strength (latest)', g.latest ? `${g.latest.strength} (as of ${g.latest.month})` : 'Not logged yet'],
+    ['Net Growth vs Prior Month', g.delta===null?'—':(g.delta>0?'+':'')+g.delta+(g.previous ? ' vs '+g.previous.month : '')],
     ['Status', status],
     ['Risk Level', risk.level==='ok'?'OK':risk.level==='critical'?'Critical':'Watch'],
     ['Risk Reasons', risk.reasons.join(' · ') || '—'],
@@ -833,16 +928,17 @@ function exportClubToExcel(clubObj, computed){
   wsSummary['!cols'] = [{wch:30},{wch:36}];
   XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
 
-  // --- Sheet 2: Meetings ---
-  const meetingRows = [['Date', 'On Time', 'Speeches', 'Guests', 'Agenda 3+ Days Early', 'Flyer 2+ Days Early', 'Score (/5)', '5-Star?']];
+  // --- Sheet 2: Meetings (incl. attendance) ---
+  const meetingRows = [['Date', 'On Time', 'Speeches', 'Members Present', 'Guests', 'Total Attendance', 'Agenda 3+ Days Early', 'Flyer 2+ Days Early', 'Score (/5)', '5-Star?']];
   [...meetings].sort((a,b)=> a.date<b.date?1:-1).forEach(m=>{
     const score = meetingScore(m);
-    meetingRows.push([m.date, m.onTime?'Yes':'No', m.speeches, m.guests, m.agenda?'Yes':'No', m.flyer?'Yes':'No', score, score===5?'Yes':'No']);
+    const members = m.membersPresent||0, guests = m.guests||0;
+    meetingRows.push([m.date, m.onTime?'Yes':'No', m.speeches, members, guests, members+guests, m.agenda?'Yes':'No', m.flyer?'Yes':'No', score, score===5?'Yes':'No']);
   });
-  if(meetingRows.length===1) meetingRows.push(['No meetings logged yet','','','','','','','']);
+  if(meetingRows.length===1) meetingRows.push(['No meetings logged yet','','','','','','','','','']);
   const wsMeetings = XLSX.utils.aoa_to_sheet(meetingRows);
-  wsMeetings['!cols'] = [{wch:12},{wch:9},{wch:10},{wch:8},{wch:20},{wch:20},{wch:10},{wch:9}];
-  XLSX.utils.book_append_sheet(wb, wsMeetings, 'Meetings');
+  wsMeetings['!cols'] = [{wch:12},{wch:9},{wch:10},{wch:14},{wch:8},{wch:16},{wch:20},{wch:20},{wch:10},{wch:9}];
+  XLSX.utils.book_append_sheet(wb, wsMeetings, 'Meetings & Attendance');
 
   // --- Sheet 3: Pathways & Mentors ---
   const pwRows = state.pathways.filter(r=>r.club===club).sort((a,b)=> a.month<b.month?1:-1);
@@ -859,12 +955,25 @@ function exportClubToExcel(clubObj, computed){
   wsPM['!cols'] = [{wch:20},{wch:18},{wch:16},{wch:12}];
   XLSX.utils.book_append_sheet(wb, wsPM, 'Pathways & Mentors');
 
-  // --- Sheet 4: Monthly Matrix ---
-  const matrixHeader = [['Month', 'Meetings Held', '5-Star Meetings', 'Pathways Adoption %', 'Mentor Coverage %']];
-  const matrixData = matrixRows.map(r=> [r.mo, r.held, r.five, r.pw===null?'—':r.pw, r.mt===null?'—':r.mt]);
-  if(matrixData.length===0) matrixData.push(['No data logged for this club yet.','','','','']);
+  // --- Sheet 4: Club Strength ---
+  const strengthHist = strengthHistory(club);
+  const strengthRows = [['Month', 'Strength (Total Members)', 'Net Growth vs Prior Month']];
+  strengthHist.forEach((r,i)=>{
+    const prior = i>0 ? strengthHist[i-1] : null;
+    const delta = prior ? r.strength - prior.strength : null;
+    strengthRows.push([r.month, r.strength, delta===null?'—':(delta>0?'+':'')+delta]);
+  });
+  if(strengthHist.length===0) strengthRows.push(['No strength records logged yet','','']);
+  const wsStrength = XLSX.utils.aoa_to_sheet(strengthRows);
+  wsStrength['!cols'] = [{wch:12},{wch:22},{wch:24}];
+  XLSX.utils.book_append_sheet(wb, wsStrength, 'Club Strength');
+
+  // --- Sheet 5: Monthly Matrix ---
+  const matrixHeader = [['Month', 'Meetings Held', '5-Star Meetings', 'Members Present', 'Guests', 'Pathways Adoption %', 'Mentor Coverage %', 'Club Strength']];
+  const matrixData = matrixRows.map(r=> [r.mo, r.held, r.five, r.members ?? '—', r.guests ?? '—', r.pw===null?'—':r.pw, r.mt===null?'—':r.mt, r.strength===null||r.strength===undefined?'—':r.strength]);
+  if(matrixData.length===0) matrixData.push(['No data logged for this club yet.','','','','','','','']);
   const wsMatrix = XLSX.utils.aoa_to_sheet([...matrixHeader, ...matrixData]);
-  wsMatrix['!cols'] = [{wch:10},{wch:14},{wch:16},{wch:20},{wch:18}];
+  wsMatrix['!cols'] = [{wch:10},{wch:14},{wch:16},{wch:16},{wch:8},{wch:20},{wch:18},{wch:14}];
   XLSX.utils.book_append_sheet(wb, wsMatrix, 'Monthly Matrix');
 
   const safeName = club.replace(/[\\/:*?"<>|]/g, '').slice(0,60);
@@ -874,17 +983,22 @@ function exportClubToExcel(clubObj, computed){
 // ---------- Shared: per-club monthly matrix (meetings/5-star/pathways/mentor by month) ----------
 function computeClubMonthlyMatrix(club){
   const meetings = state.meetings.filter(m=>m.club===club);
+  const strengthHist = strengthHistory(club);
   const months = [...new Set([
     ...meetings.map(m=>m.date.slice(0,7)),
     ...state.pathways.filter(r=>r.club===club).map(r=>r.month),
-    ...state.mentors.filter(r=>r.club===club).map(r=>r.month)
+    ...state.mentors.filter(r=>r.club===club).map(r=>r.month),
+    ...strengthHist.map(r=>r.month)
   ])].sort();
   return months.map(mo=>{
     const mMeetings = meetings.filter(m=>m.date.slice(0,7)===mo);
     const mFive = mMeetings.filter(m=>meetingScore(m)===5).length;
+    const mMembers = mMeetings.reduce((s,m)=> s+(m.membersPresent||0), 0);
+    const mGuests = mMeetings.reduce((s,m)=> s+(m.guests||0), 0);
     const pw = state.pathways.find(r=>r.club===club && r.month===mo);
     const mt = state.mentors.find(r=>r.club===club && r.month===mo);
-    return { mo, held: mMeetings.length, five: mFive, pw: pw?pct(pw.active,pw.total):null, mt: mt?pct(mt.assigned,mt.total):null };
+    const st = strengthHist.find(r=>r.month===mo);
+    return { mo, held: mMeetings.length, five: mFive, members: mMembers, guests: mGuests, pw: pw?pct(pw.active,pw.total):null, mt: mt?pct(mt.assigned,mt.total):null, strength: st ? st.strength : null };
   });
 }
 
@@ -903,7 +1017,7 @@ function exportAllClubsMonthly(){
 
   // --- Index sheet: one row per club, links the rest of the workbook together ---
   const rosterSorted = [...state.clubs].sort((a,b)=> (a.area+a.name).localeCompare(b.area+b.name));
-  const indexRows = [['Club No', 'Club Name', 'Area', 'Sheet Name', 'Months Logged', '5-Star Rate', 'Pathways', 'Mentor', 'Status']];
+  const indexRows = [['Club No', 'Club Name', 'Area', 'Sheet Name', 'Months Logged', '5-Star Rate', 'Pathways', 'Mentor', 'Latest Strength', 'Net Growth', 'Status']];
 
   rosterSorted.forEach(c=>{
     const { rate } = clubFiveStarRate(c.name);
@@ -911,6 +1025,7 @@ function exportAllClubsMonthly(){
     const mt = clubMentorPct(c.name);
     const status = computeClubStatus(c.name);
     const matrix = computeClubMonthlyMatrix(c.name);
+    const g = clubGrowth(c.name);
 
     // Excel sheet names: max 31 chars, no \ / ? * [ ] :, and must be unique
     let sheetName = c.name.replace(/[\\/?*\[\]:]/g, '').slice(0, 28).trim() || 'Club';
@@ -919,7 +1034,12 @@ function exportAllClubsMonthly(){
     while(usedNames.has(finalName)){ finalName = `${sheetName.slice(0, 26)}~${n}`; n++; }
     usedNames.add(finalName);
 
-    indexRows.push([c.number, c.name, c.area, finalName, matrix.length, rate===null?'—':rate+'%', pw===null?'—':pw+'%', mt===null?'—':mt+'%', status]);
+    indexRows.push([
+      c.number, c.name, c.area, finalName, matrix.length,
+      rate===null?'—':rate+'%', pw===null?'—':pw+'%', mt===null?'—':mt+'%',
+      g.latest ? g.latest.strength : '—', g.delta===null?'—':(g.delta>0?'+':'')+g.delta,
+      status
+    ]);
 
     const sheetRows = [
       [c.name, ''],
@@ -927,21 +1047,22 @@ function exportAllClubsMonthly(){
       ['Area', c.area],
       ['Area Director', state.directors[c.area] || '—'],
       ['Status', status],
+      ['Latest Strength', g.latest ? `${g.latest.strength} (${g.latest.month})` : 'Not logged'],
       [],
-      ['Month', 'Meetings Held', '5-Star Meetings', 'Pathways Adoption %', 'Mentor Coverage %']
+      ['Month', 'Meetings Held', '5-Star Meetings', 'Members Present', 'Guests', 'Pathways Adoption %', 'Mentor Coverage %', 'Club Strength']
     ];
     if(matrix.length===0){
-      sheetRows.push(['No data logged for this club yet.', '', '', '', '']);
+      sheetRows.push(['No data logged for this club yet.', '', '', '', '', '', '', '']);
     } else {
-      matrix.forEach(r=> sheetRows.push([r.mo, r.held, r.five, r.pw===null?'—':r.pw, r.mt===null?'—':r.mt]));
+      matrix.forEach(r=> sheetRows.push([r.mo, r.held, r.five, r.members, r.guests, r.pw===null?'—':r.pw, r.mt===null?'—':r.mt, r.strength===null?'—':r.strength]));
     }
     const ws = XLSX.utils.aoa_to_sheet(sheetRows);
-    ws['!cols'] = [{wch:22},{wch:16},{wch:16},{wch:20},{wch:18}];
+    ws['!cols'] = [{wch:22},{wch:16},{wch:16},{wch:16},{wch:8},{wch:20},{wch:18},{wch:14}];
     XLSX.utils.book_append_sheet(wb, ws, finalName);
   });
 
   const wsIndex = XLSX.utils.aoa_to_sheet(indexRows);
-  wsIndex['!cols'] = [{wch:14},{wch:36},{wch:8},{wch:22},{wch:14},{wch:12},{wch:12},{wch:12},{wch:12}];
+  wsIndex['!cols'] = [{wch:14},{wch:36},{wch:8},{wch:22},{wch:14},{wch:12},{wch:12},{wch:12},{wch:14},{wch:12},{wch:12}];
   XLSX.utils.book_append_sheet(wb, wsIndex, 'Index — All Clubs');
   // Move index sheet to the front
   wb.SheetNames.unshift(wb.SheetNames.pop());
@@ -1011,21 +1132,23 @@ function exportToExcel(){
   XLSX.utils.book_append_sheet(wb, wsDir, 'Area Directors');
 
   // --- Sheet 5: Club Summary ---
-  const clubSummaryRows = [['Club No', 'Club Name', 'Area', 'Meetings Logged', '5-Star Rate', 'Pathways Adoption', 'Mentor Coverage', 'Status', 'Risk Level', 'Risk Reasons']];
+  const clubSummaryRows = [['Club No', 'Club Name', 'Area', 'Meetings Logged', '5-Star Rate', 'Pathways Adoption', 'Mentor Coverage', 'Latest Strength', 'Net Growth', 'Status', 'Risk Level', 'Risk Reasons']];
   rosterSorted.forEach(c=>{
     const { rate, count } = clubFiveStarRate(c.name);
     const pw = clubPathwaysPct(c.name);
     const mt = clubMentorPct(c.name);
     const st = computeClubStatus(c.name);
     const risk = computeClubRisk(c);
+    const g = clubGrowth(c.name);
     clubSummaryRows.push([
       c.number, c.name, c.area, count,
       rate===null?'—':rate+'%', pw===null?'—':pw+'%', mt===null?'—':mt+'%',
+      g.latest ? g.latest.strength : '—', g.delta===null?'—':(g.delta>0?'+':'')+g.delta,
       st, risk.level==='ok'?'OK':risk.level==='critical'?'Critical':'Watch', risk.reasons.join(' · ')
     ]);
   });
   const wsClubSummary = XLSX.utils.aoa_to_sheet(clubSummaryRows);
-  wsClubSummary['!cols'] = [{wch:14},{wch:36},{wch:8},{wch:14},{wch:12},{wch:16},{wch:14},{wch:12},{wch:10},{wch:50}];
+  wsClubSummary['!cols'] = [{wch:14},{wch:36},{wch:8},{wch:14},{wch:12},{wch:16},{wch:14},{wch:14},{wch:12},{wch:12},{wch:10},{wch:50}];
   XLSX.utils.book_append_sheet(wb, wsClubSummary, 'Club Summary');
 
   // --- Sheet 6: Area Summary ---
@@ -1050,16 +1173,17 @@ function exportToExcel(){
   wsAreaSummary['!cols'] = [{wch:8},{wch:22},{wch:8},{wch:14},{wch:18},{wch:16},{wch:10},{wch:8},{wch:8},{wch:8}];
   XLSX.utils.book_append_sheet(wb, wsAreaSummary, 'Area Summary');
 
-  // --- Sheet 7: Meetings Log ---
-  const meetingRows = [['Club', 'Date', 'On Time', 'Speeches', 'Guests', 'Agenda 3+ Days Early', 'Flyer 2+ Days Early', 'Score (/5)', '5-Star?']];
+  // --- Sheet 7: Meetings & Attendance Log ---
+  const meetingRows = [['Club', 'Date', 'On Time', 'Speeches', 'Members Present', 'Guests', 'Total Attendance', 'Agenda 3+ Days Early', 'Flyer 2+ Days Early', 'Score (/5)', '5-Star?']];
   [...state.meetings].sort((a,b)=> a.date<b.date?1:-1).forEach(m=>{
     const score = meetingScore(m);
-    meetingRows.push([m.club, m.date, m.onTime?'Yes':'No', m.speeches, m.guests, m.agenda?'Yes':'No', m.flyer?'Yes':'No', score, score===5?'Yes':'No']);
+    const members = m.membersPresent||0, guests = m.guests||0;
+    meetingRows.push([m.club, m.date, m.onTime?'Yes':'No', m.speeches, members, guests, members+guests, m.agenda?'Yes':'No', m.flyer?'Yes':'No', score, score===5?'Yes':'No']);
   });
-  if(meetingRows.length===1) meetingRows.push(['No meetings logged yet','','','','','','','','']);
+  if(meetingRows.length===1) meetingRows.push(['No meetings logged yet','','','','','','','','','','']);
   const wsMeetings = XLSX.utils.aoa_to_sheet(meetingRows);
-  wsMeetings['!cols'] = [{wch:32},{wch:12},{wch:9},{wch:10},{wch:8},{wch:20},{wch:20},{wch:10},{wch:9}];
-  XLSX.utils.book_append_sheet(wb, wsMeetings, 'Meetings Log');
+  wsMeetings['!cols'] = [{wch:32},{wch:12},{wch:9},{wch:10},{wch:14},{wch:8},{wch:16},{wch:20},{wch:20},{wch:10},{wch:9}];
+  XLSX.utils.book_append_sheet(wb, wsMeetings, 'Meetings & Attendance');
 
   // --- Sheet 8: Pathways Log ---
   const pathwaysRows = [['Club', 'Month', 'Active in Path', 'Total Members', 'Adoption %']];
@@ -1080,6 +1204,21 @@ function exportToExcel(){
   const wsMentors = XLSX.utils.aoa_to_sheet(mentorsRows);
   wsMentors['!cols'] = [{wch:32},{wch:10},{wch:18},{wch:16},{wch:12}];
   XLSX.utils.book_append_sheet(wb, wsMentors, 'Mentors Log');
+
+  // --- Sheet 10: Club Strength Log ---
+  const strengthRows = [['Club', 'Area', 'Month', 'Strength (Total Members)', 'Net Growth vs Prior Month']];
+  rosterSorted.forEach(c=>{
+    const hist = strengthHistory(c.name);
+    hist.forEach((r,i)=>{
+      const prior = i>0 ? hist[i-1] : null;
+      const delta = prior ? r.strength - prior.strength : null;
+      strengthRows.push([c.name, c.area, r.month, r.strength, delta===null?'—':(delta>0?'+':'')+delta]);
+    });
+  });
+  if(strengthRows.length===1) strengthRows.push(['No strength records logged yet','','','','']);
+  const wsStrengthLog = XLSX.utils.aoa_to_sheet(strengthRows);
+  wsStrengthLog['!cols'] = [{wch:32},{wch:8},{wch:10},{wch:22},{wch:24}];
+  XLSX.utils.book_append_sheet(wb, wsStrengthLog, 'Club Strength Log');
 
   XLSX.writeFile(wb, `Division_B_Club_Health_${today}.xlsx`);
 }

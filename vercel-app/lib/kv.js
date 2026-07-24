@@ -34,24 +34,27 @@ const KEYS = {
   meetings: 'db:meetings',
   pathways: 'db:pathways',
   mentors: 'db:mentors',
-  directors: 'db:directors'
+  directors: 'db:directors',
+  strength: 'db:strength'
 };
 
 export async function getState() {
   const redis = getRedis();
-  const [clubs, meetings, pathways, mentors, directors] = await Promise.all([
+  const [clubs, meetings, pathways, mentors, directors, strength] = await Promise.all([
     redis.get(KEYS.clubs),
     redis.get(KEYS.meetings),
     redis.get(KEYS.pathways),
     redis.get(KEYS.mentors),
-    redis.get(KEYS.directors)
+    redis.get(KEYS.directors),
+    redis.get(KEYS.strength)
   ]);
   return {
     clubs: clubs || [],
     meetings: meetings || [],
     pathways: pathways || [],
     mentors: mentors || [],
-    directors: directors || {}
+    directors: directors || {},
+    strength: strength || []
   };
 }
 
@@ -60,6 +63,7 @@ export async function saveMeetings(v) { await getRedis().set(KEYS.meetings, v); 
 export async function savePathways(v) { await getRedis().set(KEYS.pathways, v); }
 export async function saveMentors(v) { await getRedis().set(KEYS.mentors, v); }
 export async function saveDirectors(v) { await getRedis().set(KEYS.directors, v); }
+export async function saveStrength(v) { await getRedis().set(KEYS.strength, v); }
 
 export function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);

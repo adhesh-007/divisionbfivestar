@@ -5,7 +5,7 @@ export default async function handler(req, res) {
 try {
     if (req.method === 'POST') {
       if (!requireAdmin(req, res)) return;
-      const { club, date, onTime, speeches, guests, agenda, flyer } = req.body || {};
+      const { club, date, onTime, speeches, guests, membersPresent, agenda, flyer } = req.body || {};
       if (!club || !date) {
         res.status(400).json({ error: 'Club and meeting date are required.' });
         return;
@@ -18,6 +18,7 @@ try {
         onTime: !!onTime,
         speeches: Number(speeches) || 0,
         guests: Number(guests) || 0,
+        membersPresent: Number(membersPresent) || 0,
         agenda: !!agenda,
         flyer: !!flyer
       });
