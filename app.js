@@ -11,6 +11,20 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7
 // Change to '/divisionbfivestar' if you prefer that URL.
 const VIEWER_URL = '/';
 
+
+// ---------- Safety helpers (the public page may not contain every admin element) ----------
+function on(id, evt, fn){
+  const el = document.getElementById(id);
+  if(el) el.addEventListener(evt, fn);
+}
+function setHtml(id, html){
+  const el = document.getElementById(id);
+  if(el) el.innerHTML = html;
+}
+function safe(fn){
+  try{ fn(); }catch(err){ console.warn('Skipped ' + (fn.name || 'render step') + ':', err); }
+}
+
 // ---------- Toast (tiny save/delete confirmation) ----------
 let toastHost = null;
 function showToast(msg, tone){
@@ -28,7 +42,7 @@ function showToast(msg, tone){
 }
 
 async function apiGet(url){
-  const res = await fetch(url);
+  const res = await fetch(url, { cache: 'no-store', credentials: 'same-origin' });
   if(!res.ok) throw new Error('Request failed: ' + url);
   return res.json();
 }
@@ -105,7 +119,7 @@ async function handleLoginSubmit(e){
     }
     isAdmin = true;
     setAdminUI();
-    document.getElementById('clubGrid').innerHTML = `<div class="loading">Loading club data…</div>`;
+    setHtml('clubGrid', `<div class="loading">Loading club data…</div>`);
     await refreshState();
     renderAll();
   }catch(err){
@@ -146,7 +160,7 @@ function switchView(viewName){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.getElementById('view-'+viewName).classList.add('active');
 }
-document.getElementById('nav').addEventListener('click', (e)=>{
+on('nav','click', (e)=>{
   const btn = e.target.closest('button[data-view]');
   if(!btn) return;
   document.querySelectorAll('#nav button').forEach(b=>b.classList.remove('active'));
@@ -388,7 +402,7 @@ function populateClubDashSelect(){
     : `<option value="">Add a club first</option>`;
   if(sorted.some(c=>c.name===current)) sel.value = current;
 }
-document.getElementById('clubDashSelect').addEventListener('change', renderClubDashboard);
+on('clubDashSelect','change', renderClubDashboard);
 
 function renderClubDashboard(){
   const sel = document.getElementById('clubDashSelect');
@@ -587,7 +601,7 @@ function populateAreaDashSelect(){
   sel.innerHTML = areas.length ? areas.map(a=>`<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('') : `<option value="">Add clubs first</option>`;
   if(areas.includes(current)) sel.value = current;
 }
-document.getElementById('areaDashSelect').addEventListener('change', renderAreaDashboard);
+on('areaDashSelect','change', renderAreaDashboard);
 
 function renderAreaDashboard(){
   const sel = document.getElementById('areaDashSelect');
@@ -856,7 +870,7 @@ function renderDirectors(){
       <input type="text" data-director-area="${escapeHtml(a)}" placeholder="Director name" value="${escapeHtml(state.directors[a]||'')}">
     </div>`).join('');
 }
-document.getElementById('directorsWrap').addEventListener('change', async (e)=>{
+on('directorsWrap','change', async (e)=>{
   const input = e.target.closest('[data-director-area]');
   if(!input) return;
   if(!requireAdmin()){ renderDirectors(); return; }
@@ -866,7 +880,7 @@ document.getElementById('directorsWrap').addEventListener('change', async (e)=>{
     renderDirectors();
   }catch(err){ renderDirectors(); }
 });
-document.getElementById('loadDirectorsBtn').addEventListener('click', async ()=>{
+on('loadDirectorsBtn','click', async ()=>{
   if(!requireAdmin()) return;
   try{
     await apiSend('/api/directors', 'POST', { loadDefaults: true });
@@ -876,26 +890,16 @@ document.getElementById('loadDirectorsBtn').addEventListener('click', async ()=>
 });
 
 function renderAll(){
-  populateClubSelects();
-  populateClubDashSelect();
-  populateAreaDashSelect();
-  renderOverview();
-  renderClubDashboard();
-  renderAreaComparison();
-  renderAreaDashboard();
-  renderMeetings();
-  renderPathways();
-  renderMentors();
-  renderStrength();
-  renderAttendance();
-  renderBadges();
-  renderSuccessPlan();
-  renderClubRoster();
-  renderDirectors();
+  [
+    populateClubSelects, populateClubDashSelect, populateAreaDashSelect,
+    renderOverview, renderClubDashboard, renderAreaComparison, renderAreaDashboard,
+    renderMeetings, renderPathways, renderMentors, renderStrength, renderAttendance,
+    renderBadges, renderSuccessPlan, renderClubRoster, renderDirectors
+  ].forEach(safe);
 }
 
 // ---------- Form handlers ----------
-document.getElementById('form-meeting').addEventListener('submit', async (e)=>{
+on('form-meeting','submit', async (e)=>{
   e.preventDefault();
   if(!requireAdmin()) return;
   const f = new FormData(e.target);
@@ -911,7 +915,7 @@ document.getElementById('form-meeting').addEventListener('submit', async (e)=>{
     e.target.reset(); renderAll();
   }catch(err){}
 });
-document.getElementById('form-pathways').addEventListener('submit', async (e)=>{
+on('form-pathways','submit', async (e)=>{
   e.preventDefault();
   if(!requireAdmin()) return;
   const f = new FormData(e.target);
@@ -922,7 +926,7 @@ document.getElementById('form-pathways').addEventListener('submit', async (e)=>{
     e.target.reset(); renderAll();
   }catch(err){}
 });
-document.getElementById('form-mentors').addEventListener('submit', async (e)=>{
+on('form-mentors','submit', async (e)=>{
   e.preventDefault();
   if(!requireAdmin()) return;
   const f = new FormData(e.target);
@@ -933,7 +937,7 @@ document.getElementById('form-mentors').addEventListener('submit', async (e)=>{
     e.target.reset(); renderAll();
   }catch(err){}
 });
-document.getElementById('form-strength').addEventListener('submit', async (e)=>{
+on('form-strength','submit', async (e)=>{
   e.preventDefault();
   if(!requireAdmin()) return;
   const f = new FormData(e.target);
@@ -944,7 +948,7 @@ document.getElementById('form-strength').addEventListener('submit', async (e)=>{
     e.target.reset(); renderAll();
   }catch(err){}
 });
-document.getElementById('form-badges').addEventListener('submit', async (e)=>{
+on('form-badges','submit', async (e)=>{
   e.preventDefault();
   if(!requireAdmin()) return;
   const f = new FormData(e.target);
@@ -955,7 +959,7 @@ document.getElementById('form-badges').addEventListener('submit', async (e)=>{
     e.target.reset(); renderAll();
   }catch(err){}
 });
-document.getElementById('form-successplan').addEventListener('submit', async (e)=>{
+on('form-successplan','submit', async (e)=>{
   e.preventDefault();
   if(!requireAdmin()) return;
   const f = new FormData(e.target);
@@ -966,7 +970,7 @@ document.getElementById('form-successplan').addEventListener('submit', async (e)
     e.target.reset(); renderAll();
   }catch(err){}
 });
-document.getElementById('form-club').addEventListener('submit', async (e)=>{
+on('form-club','submit', async (e)=>{
   e.preventDefault();
   if(!requireAdmin()) return;
   const f = new FormData(e.target);
@@ -978,7 +982,7 @@ document.getElementById('form-club').addEventListener('submit', async (e)=>{
     e.target.reset(); renderAll();
   }catch(err){ e.target.reset(); }
 });
-document.getElementById('bulkAddBtn').addEventListener('click', async ()=>{
+on('bulkAddBtn','click', async ()=>{
   if(!requireAdmin()) return;
   const raw = document.getElementById('bulkClubText').value;
   try{
@@ -1369,22 +1373,27 @@ function exportToExcel(){
 
   XLSX.writeFile(wb, `Division_B_Club_Health_${today}.xlsx`);
 }
-document.getElementById('exportExcelBtn').addEventListener('click', exportToExcel);
+on('exportExcelBtn','click', exportToExcel);
 const exportAllMonthlyBtn = document.getElementById('exportAllMonthlyBtn');
 if(exportAllMonthlyBtn) exportAllMonthlyBtn.addEventListener('click', exportAllClubsMonthly);
 
 // ---------- Init ----------
 (async function init(){
-  if(window.APP_MODE === 'admin'){
-    await checkSession();
-    if(isAdmin){
-      document.getElementById('clubGrid').innerHTML = `<div class="loading">Loading club data…</div>`;
+  try{
+    if(window.APP_MODE === 'admin'){
+      await checkSession();
+      if(isAdmin){
+        setHtml('clubGrid', `<div class="loading">Loading club data…</div>`);
+        await loadAll();
+        renderAll();
+      }
+    } else {
+      setHtml('clubGrid', `<div class="loading">Loading club data…</div>`);
       await loadAll();
       renderAll();
     }
-  } else {
-    document.getElementById('clubGrid').innerHTML = `<div class="loading">Loading club data…</div>`;
-    await loadAll();
-    renderAll();
+  }catch(err){
+    console.error('Failed to load data:', err);
+    setHtml('clubGrid', `<div class="empty">Couldn't load the data. Please refresh the page in a moment.</div>`);
   }
 })();
