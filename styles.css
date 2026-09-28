@@ -141,10 +141,6 @@ main{flex:1;min-width:0;padding:34px clamp(18px,3.2vw,44px) 60px;max-width:1500p
   transition:transform .2s ease,box-shadow .2s ease;
   animation:fadeUp .4s ease both;
 }
-.stat-card::before{
-  content:"";position:absolute;left:0;top:0;right:0;height:4px;
-  background:linear-gradient(90deg,var(--ink-2),var(--gold));
-}
 .stat-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-md);}
 .stat-card .label{
   font-family:'Montserrat',sans-serif;font-weight:700;font-size:10.5px;
