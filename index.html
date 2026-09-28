@@ -1,42 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<title>Division B · Admin · Club Health</title>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Division B · Club Health</title>
+<link rel="icon" type="image/png" href="/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link rel="stylesheet" href="/styles.css">
-  <link rel="icon" type="image/png" href="/icon.png">
 <style>
-  #loginGate{display:flex;min-height:100vh;align-items:center;justify-content:center;background:transparent;}
-  .login-card{background:linear-gradient(165deg, rgba(255,255,255,.62), rgba(255,255,255,.34));backdrop-filter:blur(26px) saturate(180%);-webkit-backdrop-filter:blur(26px) saturate(180%);border:1px solid rgba(255,255,255,.55);border-radius:22px;padding:36px 34px;width:100%;max-width:340px;box-shadow:0 24px 60px rgba(0,54,79,.22), inset 0 1px 0 rgba(255,255,255,.8);}
-  .login-card .eyebrow{font-family:'Montserrat',sans-serif;font-weight:700;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2);}
-  .login-card h1{font-family:'Montserrat',sans-serif;font-weight:700;font-size:21px;margin:4px 0 22px;color:var(--ink);}
-  .login-card .field{margin-bottom:14px;}
-  .login-card label{font-family:'Montserrat',sans-serif;font-size:11px;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px;}
-  .login-card input{width:100%;border:1px solid var(--border);border-radius:7px;padding:10px 11px;font-size:14px;font-family:'Source Sans 3',sans-serif;}
-  .login-card button{all:unset;cursor:pointer;display:block;width:100%;box-sizing:border-box;text-align:center;background:linear-gradient(165deg, rgba(0,54,79,.85), rgba(44,110,143,.72));backdrop-filter:blur(10px);color:#fff;font-family:'Montserrat',sans-serif;font-weight:700;font-size:14px;padding:11px;border-radius:11px;margin-top:6px;border:1px solid rgba(255,255,255,.2);box-shadow:inset 0 1px 0 rgba(255,255,255,.25);}
-  .login-card button:hover{background:var(--ink);}
-  .login-card button:disabled{opacity:.6;cursor:default;}
-  .login-error{color:var(--clay);font-size:12.5px;min-height:16px;margin-top:10px;}
-  .app{display:none;}
+  /* Viewer mode: the app is always visible, and every admin-only control is hidden. */
+  .app{display:flex;}
+  .admin-only{display:none !important;}
 </style>
 </head>
 <body>
-<div id="loginGate">
-  <div class="login-card">
-    <span class="eyebrow">Division B · Admin</span>
-    <h1>Sign in to edit data</h1>
-    <form id="loginForm">
-      <div class="field"><label>Username</label><input type="text" name="username" autocomplete="username" required></div>
-      <div class="field"><label>Password</label><input type="password" name="password" autocomplete="current-password" required></div>
-      <button type="submit">Sign in</button>
-      <div class="login-error" id="loginError"></div>
-    </form>
-  </div>
-</div>
 <div class="app">
   <aside class="sidebar">
     <div class="brand">
@@ -56,14 +35,13 @@
       <button data-view="strength"><span class="dot"></span>Attendance &amp; Strength</button>
       <button data-view="badges"><span class="dot"></span>Education Badges</button>
       <button data-view="successplan"><span class="dot"></span>Club Success Plan</button>
-      <span class="nav-label">Administration</span>
-      <button data-view="clubs"><span class="dot"></span>Manage Clubs &amp; Areas</button>
+      <span class="nav-label">Directory</span>
+      <button data-view="clubs"><span class="dot"></span>Club Roster</button>
     </nav>
     <button id="exportExcelBtn" style="all:unset;cursor:pointer;background:var(--gold);color:var(--ink);font-weight:700;font-size:13px;padding:10px 12px;border-radius:8px;text-align:center;">⬇ Export to Excel</button>
     <button id="exportAllMonthlyBtn" style="all:unset;cursor:pointer;background:transparent;border:1px solid rgba(255,255,255,.22);color:var(--paper);font-weight:600;font-size:12.5px;padding:9px 12px;border-radius:8px;text-align:center;">⬇ Export Monthly (one sheet per club)</button>
-    <div id="adminBox" class="admin-status on"><span id="adminStatusText">🔓 Admin mode</span></div>
-    <button id="adminLogoutBtn" class="admin-login-btn">Log out</button>
-    <div class="sidebar-foot">You're signed in as admin. Changes save instantly and are visible to everyone at the public link.</div>
+    <div id="adminBox" class="admin-status"><span id="adminStatusText">🔒 Viewer mode</span></div>
+    <div class="sidebar-foot">You're viewing the public, read-only dashboard. It updates automatically when the admin makes changes.</div>
   </aside>
 
   <main>
@@ -73,7 +51,7 @@
       <p class="page-sub">Weekly rollup across 5-Star Meetings, Pathways adoption, and mentor coverage.</p>
       <div class="stat-strip" id="statStrip"></div>
       <div id="riskPanel"></div>
-      <div id="clubGrid" class="club-grid"></div>
+      <div id="clubGrid" class="club-grid"><div class="loading">Loading club data…</div></div>
     </section>
 
     <!-- CLUB DASHBOARDS -->
@@ -103,24 +81,6 @@
     <section class="view" id="view-meetings">
       <h2 class="page-title">5-Star Meetings</h2>
       <p class="page-sub">Started/ended on time · 2+ Pathways speeches · 2+ guests · agenda out 3+ days early · flyer out 2+ days early.</p>
-      <div class="admin-banner">🔒 You're viewing in read-only mode. Log in as admin (sidebar) to add or remove meetings.</div>
-      <div class="panel admin-only">
-        <h3>Log a meeting</h3>
-        <form class="entry-form" id="form-meeting">
-          <div class="field"><label>Club</label><select name="club" required></select></div>
-          <div class="field"><label>Meeting date</label><input type="date" name="date" required></div>
-          <div class="field"><label>Started &amp; ended on time?</label>
-            <select name="onTime"><option value="1">Yes</option><option value="0">No</option></select></div>
-          <div class="field"><label># Pathways speeches</label><input type="number" name="speeches" min="0" value="0" required></div>
-          <div class="field"><label># Members present</label><input type="number" name="membersPresent" min="0" value="0" required></div>
-          <div class="field"><label># Guests</label><input type="number" name="guests" min="0" value="0" required></div>
-          <div class="field"><label>Agenda 3+ days early?</label>
-            <select name="agenda"><option value="1">Yes</option><option value="0">No</option></select></div>
-          <div class="field"><label>Flyer 2+ days early?</label>
-            <select name="flyer"><option value="1">Yes</option><option value="0">No</option></select></div>
-          <button class="primary" type="submit">Add meeting</button>
-        </form>
-      </div>
       <div class="panel">
         <h3>Meeting log</h3>
         <div id="meetingsTableWrap"></div>
@@ -131,17 +91,6 @@
     <section class="view" id="view-pathways">
       <h2 class="page-title">Pathways Adoption</h2>
       <p class="page-sub">Share of members actively working a Pathways path, logged monthly per club.</p>
-      <div class="admin-banner">🔒 You're viewing in read-only mode. Log in as admin (sidebar) to add or remove records.</div>
-      <div class="panel admin-only">
-        <h3>Log adoption</h3>
-        <form class="entry-form" id="form-pathways">
-          <div class="field"><label>Club</label><select name="club" required></select></div>
-          <div class="field"><label>Month</label><input type="month" name="month" required></div>
-          <div class="field"><label>Members active in a path</label><input type="number" name="active" min="0" required></div>
-          <div class="field"><label>Total club members</label><input type="number" name="total" min="1" required></div>
-          <button class="primary" type="submit">Add record</button>
-        </form>
-      </div>
       <div class="panel"><h3>Adoption log</h3><div id="pathwaysTableWrap"></div></div>
     </section>
 
@@ -149,34 +98,13 @@
     <section class="view" id="view-mentors">
       <h2 class="page-title">Mentor Assignment Status</h2>
       <p class="page-sub">Share of members with an assigned mentor, logged monthly per club.</p>
-      <div class="admin-banner">🔒 You're viewing in read-only mode. Log in as admin (sidebar) to add or remove records.</div>
-      <div class="panel admin-only">
-        <h3>Log mentor coverage</h3>
-        <form class="entry-form" id="form-mentors">
-          <div class="field"><label>Club</label><select name="club" required></select></div>
-          <div class="field"><label>Month</label><input type="month" name="month" required></div>
-          <div class="field"><label>Members with a mentor</label><input type="number" name="assigned" min="0" required></div>
-          <div class="field"><label>Total club members</label><input type="number" name="total" min="1" required></div>
-          <button class="primary" type="submit">Add record</button>
-        </form>
-      </div>
       <div class="panel"><h3>Mentor log</h3><div id="mentorsTableWrap"></div></div>
     </section>
 
-    <!-- CLUB STRENGTH -->
+    <!-- ATTENDANCE & STRENGTH -->
     <section class="view" id="view-strength">
       <h2 class="page-title">Attendance &amp; Strength</h2>
       <p class="page-sub">Member + guest attendance per meeting, and total club membership (strength), tracked monthly so growth or loss is visible at a glance.</p>
-      <div class="admin-banner">🔒 You're viewing in read-only mode. Log in as admin (sidebar) to add or remove records.</div>
-      <div class="panel admin-only">
-        <h3>Log club strength</h3>
-        <form class="entry-form" id="form-strength">
-          <div class="field"><label>Club</label><select name="club" required></select></div>
-          <div class="field"><label>Month</label><input type="month" name="month" required></div>
-          <div class="field"><label>Total members (strength)</label><input type="number" name="strength" min="0" required></div>
-          <button class="primary" type="submit">Add record</button>
-        </form>
-      </div>
       <div class="panel">
         <h3>Strength log</h3>
         <p class="page-sub" style="margin-bottom:10px;">Net growth compares each entry to that club's previous month on record.</p>
@@ -192,16 +120,6 @@
     <section class="view" id="view-badges">
       <h2 class="page-title">Education Achievements</h2>
       <p class="page-sub">Pathways levels, awards, and other education achievements members complete — logged per club as they're earned.</p>
-      <div class="admin-banner">🔒 You're viewing in read-only mode. Log in as admin (sidebar) to add or remove records.</div>
-      <div class="panel admin-only">
-        <h3>Log an achievement</h3>
-        <form class="entry-form" id="form-badges">
-          <div class="field"><label>Club</label><select name="club" required></select></div>
-          <div class="field"><label>Month</label><input type="month" name="month" required></div>
-          <div class="field"><label>Level completions</label><input type="number" name="count" min="0" value="1" required></div>
-          <button class="primary" type="submit">Log achievements</button>
-        </form>
-      </div>
       <div class="panel"><h3>Achievement log</h3><div id="badgesTableWrap"></div></div>
     </section>
 
@@ -209,81 +127,21 @@
     <section class="view" id="view-successplan">
       <h2 class="page-title">Club Success Plan</h2>
       <p class="page-sub">Submission status of each club's annual Club Success Plan to the district.</p>
-      <div class="admin-banner">🔒 You're viewing in read-only mode. Log in as admin (sidebar) to add or update records.</div>
-      <div class="panel admin-only">
-        <h3>Log submission status</h3>
-        <form class="entry-form" id="form-successplan">
-          <div class="field"><label>Club</label><select name="club" required></select></div>
-          <div class="field"><label>Program year / period</label><input type="text" name="period" placeholder="e.g. 2026-2027" required></div>
-          <div class="field"><label>Status</label>
-            <select name="status" required><option value="Submitted">Submitted</option><option value="Not Submitted">Not Submitted</option></select></div>
-          <div class="field"><label>Notes (optional)</label><input type="text" name="notes" placeholder="e.g. submitted late, pending review"></div>
-          <button class="primary" type="submit">Save status</button>
-        </form>
-      </div>
       <div class="panel"><h3>Submission log</h3><div id="successPlanTableWrap"></div></div>
     </section>
 
-    <!-- CLUBS & AREAS -->
+    <!-- CLUB ROSTER -->
     <section class="view" id="view-clubs">
-      <h2 class="page-title">Manage Clubs &amp; Areas</h2>
-      <p class="page-sub">Every club needs to be listed here once — it populates the dropdowns everywhere else.</p>
-      <div class="admin-banner">🔒 You're viewing in read-only mode. Log in as admin (sidebar) to add, edit, or remove clubs and areas.</div>
-
-      <div class="panel admin-only">
-        <h3>Add a single club</h3>
-        <form class="entry-form" id="form-club">
-          <div class="field"><label>Club No</label><input type="text" name="number" placeholder="e.g. 7225106" required></div>
-          <div class="field"><label>Club name</label><input type="text" name="name" placeholder="e.g. SLB Coimbatore Toastmasters Club" required></div>
-          <div class="field"><label>Area</label><input type="text" name="area" placeholder="e.g. B1" required></div>
-          <button class="primary" type="submit">Add club</button>
-        </form>
-      </div>
-
-      <div class="panel admin-only">
-        <h3>Bulk add clubs</h3>
-        <p class="page-sub" style="margin-bottom:10px;">One club per line, as <code>Club No, Club Name, Area</code>.</p>
-        <div class="field" style="margin-bottom:10px;">
-          <textarea id="bulkClubText" rows="6" style="width:100%;border:1px solid var(--border);border-radius:7px;padding:10px;font-family:'Source Sans 3',sans-serif;font-size:12.5px;resize:vertical;">7225106, SLB Coimbatore Toastmasters Club, B1
-28677389, Western Ghats Coimbatore Toastmasters Club, B1
-7944329, VCEW Toastmasters Club, B1
-28679724, Karpagam Tech Toastmasters Club, B1
-7934411, Lauritz Knudsen Coimbatore Toastmasters Club, B2
-28678844, Sri Eshwar Toastmasters Club - Chapter 2, B2
-6938059, Sri Eshwar Toastmasters Club, B2
-28679730, Karpagam College of Engineering Toastmasters, B2
-28679922, Rathinam Toastmasters Club, B3
-4469699, Coimbatore Speakers Forum, B3
-6005672, KIT Toastmasters Club, B3
-28677948, Infosys Coimbatore Toastmasters Club, B3
-28677052, PSC Toastmasters Club, B3
-28678484, Speak Up Salem Toastmasters Club, B4
-7217134, Pyrocity Toastmasters Club, B4
-7400685, Tuticorin Toastmasters, B4
-5359135, Nagercoil Toastmasters, B4
-28675904, Stella Mary's Toastmasters Kanyakumari, B4
-28680577, Nelveli Toastmasters Club, B4</textarea>
-        </div>
-        <button class="primary" id="bulkAddBtn" type="button">Add these clubs</button>
-        <span id="bulkAddMsg" style="font-size:12px;color:var(--text-muted);margin-left:10px;"></span>
-      </div>
-
+      <h2 class="page-title">Club Roster</h2>
+      <p class="page-sub">All clubs currently tracked in Division B.</p>
       <div class="panel">
         <h3>Current roster</h3>
-        <p class="page-sub" style="margin-bottom:10px;" id="rosterHint">Log in as admin to remove clubs.</p>
         <div id="clubRosterWrap"></div>
-      </div>
-
-      <div class="panel directors-panel admin-only">
-        <h3>Area Directors</h3>
-        <p class="page-sub" style="margin-bottom:10px;">One director per area. Type a name and click away to save — or load the current Division B assignments below.</p>
-        <button class="primary" id="loadDirectorsBtn" type="button" style="margin-bottom:14px;">Load B1–B4 directors</button>
-        <div id="directorsWrap"></div>
       </div>
     </section>
   </main>
 </div>
-<script>window.APP_MODE = 'admin';</script>
+<script>window.APP_MODE = 'viewer';</script>
 <script src="/app.js"></script>
 </body>
 </html>
