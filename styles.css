@@ -95,7 +95,8 @@ code{background:var(--grey-bg);padding:1px 6px;border-radius:6px;font-size:.9em;
 #nav button:hover{background:rgba(255,255,255,.08);color:#fff;transform:translateX(2px);}
 #nav button.active{
   background:linear-gradient(90deg,rgba(242,199,68,.22),rgba(242,199,68,.06));
-  color:#fff;box-shadow:inset 3px 0 0 var(--gold);
+  color:#fff;
+  box-shadow:none; /* Removed left gold border accent */
 }
 #nav button.active .dot{background:var(--gold);box-shadow:0 0 0 4px rgba(242,199,68,.22);}
 
@@ -141,6 +142,7 @@ main{flex:1;min-width:0;padding:34px clamp(18px,3.2vw,44px) 60px;max-width:1500p
   transition:transform .2s ease,box-shadow .2s ease;
   animation:fadeUp .4s ease both;
 }
+/* Removed .stat-card::before gradient top bar */
 .stat-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-md);}
 .stat-card .label{
   font-family:'Montserrat',sans-serif;font-weight:700;font-size:10.5px;
@@ -173,12 +175,12 @@ main{flex:1;min-width:0;padding:34px clamp(18px,3.2vw,44px) 60px;max-width:1500p
 /* ---------- Risk panel ---------- */
 .risk-panel{
   background:linear-gradient(180deg,#FFFBF0,#FFF6E0);
-  border:1px solid #F3DFA8;border-left:5px solid var(--gold);
+  border:1px solid #F3DFA8; /* Removed thick left border */
   border-radius:var(--radius);padding:16px 20px;margin-bottom:26px;
   box-shadow:var(--shadow-sm);
 }
 .risk-panel h4{font-size:14.5px;color:#7A5410;margin-bottom:8px;}
-.risk-panel.ok{background:linear-gradient(180deg,#F1FAF5,#E8F6EE);border-color:#BFE3CF;border-left-color:var(--sage);}
+.risk-panel.ok{background:linear-gradient(180deg,#F1FAF5,#E8F6EE);border-color:#BFE3CF;}
 .risk-panel.ok h4{color:var(--sage);margin:0;}
 .risk-row{
   display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 18px;
@@ -380,7 +382,7 @@ body.is-admin .admin-banner{display:none;}
 }
 .bar-val{font-size:11.5px;font-weight:800;color:var(--ink);margin-bottom:4px;font-family:'Montserrat',sans-serif;}
 .bar{
-  width:100%;max-width:46px;border-radius:9px 9px 3px 3px;
+  width:100%;max-width:46px;border-radius:99px 9px 3px 3px;
   background:linear-gradient(180deg,var(--ink-2),var(--ink));
   transition:filter .15s ease,transform .15s ease;transform-origin:bottom;
   animation:grow .6s cubic-bezier(.2,.8,.2,1) both;
