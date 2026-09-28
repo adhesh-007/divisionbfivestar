@@ -7,6 +7,10 @@ let isAdmin = false; // only ever true on the admin page, after a verified serve
 const DEFAULT_DIRECTORS = { B1: "TM Karthick Rajendran", B2: "Atchayashiri", B3: "Jonathan", B4: "Sunita Rajaseelan" };
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
 
+// Where "viewer mode" lives (the public read-only dashboard).
+// Change to '/divisionbfivestar' if you prefer that URL.
+const VIEWER_URL = '/';
+
 // ---------- Toast (tiny save/delete confirmation) ----------
 let toastHost = null;
 function showToast(msg, tone){
@@ -110,10 +114,18 @@ async function handleLoginSubmit(e){
     if(submitBtn){ submitBtn.disabled = false; submitBtn.textContent = 'Sign in'; }
   }
 }
+// FIXED: after logging out, send the person to the public read-only viewer page
+// instead of leaving them on the admin login screen.
 async function handleLogout(){
-  await fetch('/api/logout', { method:'POST' });
+  try{
+    await fetch('/api/logout', { method:'POST', credentials:'same-origin' });
+  }catch(e){
+    // even if the request fails, still leave admin mode on this device
+  }
   isAdmin = false;
   setAdminUI();
+  // replace() so the Back button doesn't return to the admin page
+  window.location.replace(VIEWER_URL);
 }
 function requireAdmin(){
   if(!isAdmin){ alert('🔒 Admin login required to make changes.'); return false; }
